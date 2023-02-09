@@ -3,6 +3,8 @@ from random import randint
 from strawberry.fastapi import GraphQLRouter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Generic, List, TypeVar
+T = TypeVar("T")
 
 @strawberry.type
 class Todo:
@@ -11,53 +13,42 @@ class Todo:
     desc: str 
     isComplete: bool
 
-@strawberry.type
-class TodoDoesNotExist:
-    todoId: int 
-    message: str
 
 @strawberry.type
 class DeletionInformation:
     message:str
 
-@strawberry.input
-class TodoIdentificationInput:
-    todoId: int
 
 @strawberry.input
-class TodoCreationInput:
-    title: str 
-    desc: str 
+class TodoInput:
+    todoId: int    
+    title: str    
+    desc: str    
+    isComplete: bool
+
+
+@strawberry.input
+class UpdateTodosInput:
+    updatedTodos: list[TodoInput]
 
 
 
-Response = strawberry.union(
-    "AddStatsResponse", [Todo, TodoDoesNotExist]
-)
-
-todos:dict[int, Todo] = {}
+todos:list[Todo] = []
 
 # query resolver
 def todo_resolver(title:str | None = None) -> list[Todo]:
 
     if title:
-        return [t for t in list(todos.values()) if title in t.title]
+        return [t for t in todos if title in t.title]
     
-    return list(todos.values())
+    return todos
     
-# mutations
-def create_todo(input: TodoCreationInput) -> Todo:  
-    todo = Todo(todoId=randint(100,999), title=input.title, desc=input.desc, isComplete=False)
-    todos[todo.todoId] = todo
-    return todo
+#mutations
+def update_todos(input: UpdateTodosInput) -> list[Todo]:  
+    global todos
+    todos = [Todo(**t.__dict__) for t in input.updatedTodos]
+    return todos
 
-def complete_todo(input: TodoIdentificationInput) -> Response:  # type: ignore
-    
-    if todo := todos.get(input.todoId):
-        todo.isComplete = True
-        return todo
-    
-    return TodoDoesNotExist(todoId=input.todoId, message="todo does not exist")
 
 def clear_todos() ->DeletionInformation:
     size = len(todos)
@@ -72,8 +63,7 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    create_todo: Todo = strawberry.field(resolver=create_todo)
-    complete_todo: Todo | TodoDoesNotExist = strawberry.field(resolver=complete_todo)
+    update_todos: list[Todo] = strawberry.field(resolver=update_todos)
     clear_todos: DeletionInformation = strawberry.field(resolver=clear_todos)
 
 schema = strawberry.Schema(Query, Mutation)
